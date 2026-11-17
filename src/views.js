@@ -103,10 +103,12 @@ function productCard(p) {
 }
 
 const photos = require('./photos');
+const BUNDLED = new Set((() => { try { return require('fs').readdirSync(require('path').join(__dirname, '..', 'public', 'img')).filter(f => f.endsWith('-1200.webp')).map(f => f.replace('-1200.webp', '')); } catch { return []; } })());
 
 // A site photo, or a quiet placeholder naming the shot until it's uploaded in Admin > Photos.
 function photo(key, alt, { cls = '', sizes = '100vw', eager = false } = {}) {
-  const base = photos.get(key);
+  // an uploaded photo wins; otherwise use the one shipped with the site in public/img
+  const base = photos.get(key) || (BUNDLED.has(key) ? `/static/img/${key}` : '');
   const slot = photos.byKey[key] || { label: key };
   if (base) return `<img class="${cls}" src="${base}-2400.webp" srcset="${base}-1200.webp 1200w, ${base}-2400.webp 2400w" sizes="${sizes}" alt="${esc(alt)}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">`;
   return `<div class="ph ${cls}" role="img" aria-label="${esc(alt)}"><span>Photo to add: ${esc(slot.label)}</span></div>`;
@@ -159,6 +161,17 @@ function home(products) {
     <div class="cats">${cats.map(c => `<a href="/shop?c=${esc(c.key)}"><b>${esc(navLabel(c.label))}</b><span>${count(c.key) ? `${count(c.key)} part${count(c.key) > 1 ? 's' : ''}` : 'Coming soon'}</span></a>`).join('')}</div>
   </section>
 
+  <section class="wrap sec how">
+    <p class="kicker">How a part gets made</p>
+    <h2>From a broken original to a part that fits.</h2>
+    <ol class="steps">
+      <li><figure>${photo('step_scan', 'An original part on the scanner with marker stands', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>01</span>Scan</h3><p>The original part goes on the scanner. A slow lap around it captures every lip, rib and tab.</p></li>
+      <li><figure>${photo('step_model', 'A scanned trim piece in Fusion', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>02</span>Model</h3><p>The scan gets rebuilt as a real CAD model, true to size, with the worn and broken spots fixed.</p></li>
+      <li><figure>${photo('step_print', 'A printed gauge pod on the printer bed', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>03</span>Print</h3><p>Printed in ASA or PETG so it holds up to sun, heat and the trail.</p></li>
+      <li><figure>${photo('step_fit', 'The printed gauge pod fitted in a first-gen RAV4 dash', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>04</span>Fit</h3><p>It goes on my own RAV4 first. If it doesn't fit right, it doesn't go in the shop.</p></li>
+    </ol>
+  </section>
+
   <section class="ask">
     <div class="wrap ask-grid">
       <div>
@@ -166,7 +179,7 @@ function home(products) {
         <p>Cracked trim, missing clips, broken brackets. Send a photo of what's busted and your year. If we can make it, you get a price, and the part usually lands in the shop for everyone else.</p>
         <p><a class="btn" href="/request">Request a part</a></p>
       </div>
-      <figure class="ask-img">${photo('before_after', 'A cracked original part next to the printed replacement', { sizes: '(max-width:900px) 100vw, 45vw' })}<figcaption><span>OEM, 25 years old</span><span>Ours, ASA</span></figcaption></figure>
+      <figure class="ask-img">${photo('before_after', 'A first-gen RAV4 being parted out in the garage', { sizes: '(max-width:900px) 100vw, 45vw' })}<figcaption><span>Parting one out in the garage</span></figcaption></figure>
     </div>
   </section>
 
@@ -185,11 +198,7 @@ function home(products) {
     </div>
   </section>
 
-  <section class="reel" aria-label="Photos">
-    <figure>${photo('installed', 'A RAV4 Retro part installed', { sizes: '(max-width:900px) 80vw, 34vw' })}</figure>
-    <figure>${photo('trail', 'A first-gen RAV4 on the trail', { sizes: '(max-width:900px) 80vw, 34vw' })}</figure>
-    <figure>${photo('detail', 'Close-up of a printed part', { sizes: '(max-width:900px) 80vw, 34vw' })}</figure>
-  </section>`, { bare: true, home: true });
+  <section class="reel" aria-label="On the trail">${photo('trail', 'A first-gen RAV4 with a roof box on a leaf-covered trail', { sizes: '100vw' })}</section>`, { bare: true, home: true });
 }
 
 function shop(products, { c, type, q }) {

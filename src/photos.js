@@ -9,7 +9,11 @@ const SLOTS = [
   { key: 'trail', label: 'On the trail', hint: 'The vehicle on the trail: mud, gravel, two-track.', ratio: '4/3' },
   { key: 'detail', label: 'Part close-up', hint: 'A printed part on the bench, good light, sharp edges.', ratio: '1/1' },
   { key: 'garage', label: 'The garage', hint: 'Wide shot: the vehicles, the printers, the bench.', ratio: '4/3' },
-  { key: 'before_after', label: 'Broken OEM vs ours', hint: 'Cracked original next to the printed replacement.', ratio: '4/3' },
+  { key: 'before_after', label: 'Request section photo', hint: 'A parts vehicle, or a broken original next to the printed one.', ratio: '4/3' },
+  { key: 'step_scan', label: 'How it\'s made 1: scan', hint: 'An original part on the scanner.', ratio: '1/1' },
+  { key: 'step_model', label: 'How it\'s made 2: CAD model', hint: 'The part on screen in CAD.', ratio: '1/1' },
+  { key: 'step_print', label: 'How it\'s made 3: printed', hint: 'The finished print on the bed.', ratio: '1/1' },
+  { key: 'step_fit', label: 'How it\'s made 4: fitted', hint: 'The part installed on the vehicle.', ratio: '1/1' },
 ];
 const byKey = Object.fromEntries(SLOTS.map(s => [s.key, s]));
 

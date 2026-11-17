@@ -307,9 +307,8 @@ details.more[open] summary { margin-bottom: 16px; }
 .facts div { display: grid; grid-template-columns: 96px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--rule); font-size: 15.5px; }
 .facts dt { font-weight: 800; } .facts dd { margin: 0; color: var(--ink-2); }
 
-.reel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 110px; }
-.reel figure { margin: 0; aspect-ratio: 4 / 3; overflow: hidden; }
-.reel img, .reel .ph { width: 100%; height: 100%; object-fit: cover; }
+.reel { margin-top: 110px; height: clamp(260px, 42vw, 560px); overflow: hidden; }
+.reel img, .reel .ph { width: 100%; height: 100%; object-fit: cover; object-position: center 60%; }
 
 .foot-word { font: italic 900 15.5vw/0.8 var(--font); font-stretch: 125%; letter-spacing: -0.04em; color: transparent; -webkit-text-stroke: 1.5px rgba(244,238,225,.22); white-space: nowrap; overflow: hidden; text-align: center; padding-top: 40px; }
 
@@ -319,7 +318,6 @@ details.more[open] summary { margin-bottom: 16px; }
   .hero-band { top: auto; bottom: 18%; }
   .hero-shot { transform: rotate(-2deg); border-width: 6px; }
   .drop-img { box-shadow: 8px 8px 0 var(--red); }
-  .reel { grid-template-columns: 1fr 1fr; } .reel figure:nth-child(3) { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
 }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr 1fr; gap: 16px 12px; }
@@ -334,3 +332,13 @@ details.more[open] summary { margin-bottom: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .hero-band i { animation: none; } .card, .drop-img img { transition: none; } }
 .ask-img .ph { align-items: flex-start; }
+
+.how h2 { max-width: 18ch; }
+.steps { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; counter-reset: s; }
+.steps figure { margin: 0 0 16px; aspect-ratio: 1; overflow: hidden; border: 2px solid var(--ink); background: var(--moss); }
+.steps img, .steps .ph { width: 100%; height: 100%; object-fit: cover; }
+.steps h3 { font: italic 900 26px/1 var(--font); font-stretch: 120%; padding-bottom: 10px; border-bottom: 3px solid var(--ink); margin-bottom: 10px; display: flex; align-items: baseline; gap: 10px; }
+.steps h3 span { font-size: 15px; color: var(--red); font-style: normal; font-stretch: 100%; }
+.steps p { color: var(--ink-2); font-size: 15.5px; margin: 0; }
+@media (max-width: 900px) { .steps { grid-template-columns: 1fr 1fr; gap: 28px 16px; } }
+.hero-shot img { object-position: center 55%; }
