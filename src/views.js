@@ -41,6 +41,8 @@ const navLabel = l => l.replace(/\s*\(.*\)\s*/, '').trim();
 const years = l => (l.match(/\((.*)\)/) || [])[1] || '';
 const partNo = p => `RR-${String(p.id).padStart(4, '0')}`;
 
+// changes whenever style.css changes, so browsers never use a stale copy
+const ASSET_V = (() => { try { return Math.round(require('fs').statSync(require('path').join(__dirname, '..', 'public', 'style.css')).mtimeMs).toString(36); } catch { return '1'; } })();
 const stripe = (cls = '') => `<div class="stripe ${cls}" aria-hidden="true"><i></i><i></i><i></i></div>`;
 
 function layout(title, body, { admin = false, bare = false, home = false } = {}) {
@@ -59,7 +61,7 @@ function layout(title, body, { admin = false, bare = false, home = false } = {})
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..900;1,62..125,400..900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=${ASSET_V}">
 ${admin ? '' : '<script src="/static/cart.js"></script>'}
 </head><body class="${admin ? 'admin' : ''}">
 <a class="skip" href="#main">Skip to content</a>
@@ -164,11 +166,11 @@ function home(products) {
   <section class="wrap sec how">
     <p class="kicker">How a part gets made</p>
     <h2>From a broken original to a part that fits.</h2>
-    <ol class="steps">
-      <li><figure>${photo('step_scan', 'An original part on the scanner with marker stands', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>01</span>Scan</h3><p>The original part goes on the scanner. A slow lap around it captures every lip, rib and tab.</p></li>
-      <li><figure>${photo('step_model', 'A scanned trim piece in Fusion', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>02</span>Model</h3><p>The scan gets rebuilt as a real CAD model, true to size, with the worn and broken spots fixed.</p></li>
-      <li><figure>${photo('step_print', 'A printed gauge pod on the printer bed', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>03</span>Print</h3><p>Printed in ASA or PETG so it holds up to sun, heat and the trail.</p></li>
-      <li><figure>${photo('step_fit', 'The printed gauge pod fitted in a first-gen RAV4 dash', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3><span>04</span>Fit</h3><p>It goes on my own RAV4 first. If it doesn't fit right, it doesn't go in the shop.</p></li>
+    <ol class="steps" role="list">
+      <li><figure>${photo('step_scan', 'An original part on the scanner with marker stands', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3>Scan</h3><p>The original part goes on the scanner. A slow lap around it captures every lip, rib and tab.</p></li>
+      <li><figure>${photo('step_model', 'A scanned trim piece in Fusion', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3>Model</h3><p>The scan gets rebuilt as a real CAD model, true to size, with the worn and broken spots fixed.</p></li>
+      <li><figure>${photo('step_print', 'A printed gauge pod on the printer bed', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3>Print</h3><p>Printed in ASA or PETG so it holds up to sun, heat and the trail.</p></li>
+      <li><figure>${photo('step_fit', 'The printed gauge pod fitted in a first-gen RAV4 dash', { sizes: '(max-width:900px) 50vw, 25vw' })}</figure><h3>Fit</h3><p>It goes on my own RAV4 first. If it doesn't fit right, it doesn't go in the shop.</p></li>
     </ol>
   </section>
 
