@@ -98,7 +98,7 @@ const DEFAULTS = {
   download_days: '30',
   download_max: '5',
   local_pickup: 'Ohio',
-  about: "RAV4 Retro is one guy in Ohio with too many first-gen RAV4s. When a part on mine broke and Toyota stopped making it, I scanned it, fixed the design and printed a better one.\n\nEverything here is made to order in UV-resistant ASA or PETG, test-fit on my own vehicles before it goes up for sale. If you need a part that isn't listed, send a photo and I'll see what I can do.",
+  about: "I've owned first-gen RAV4s for the last ten years, and for the past few I've been parting them out and selling what I pull to other owners. Every year that gets harder. Good used parts are drying up, and most of the aftermarket stuff made for these is long gone.\n\nRAV4 Retro is my way of keeping these on the road and keeping the community going. I make the parts that are getting hard to find, test-fit them on my own vehicles, and sell them to the people who still drive and wrench on these. If you need something that isn't here yet, send me a photo. Chances are someone else needs it too.",
   intro: "Reproduction and upgrade parts for 1996–2000 Toyota RAV4s, printed in Ohio and test-fit on our own vehicles.",
   contact_email: '',
   facebook_url: '',
@@ -106,6 +106,8 @@ const DEFAULTS = {
 };
 const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
 for (const [k, v] of Object.entries(DEFAULTS)) ins.run(k, v);
+// replace the first-draft About text if it was never edited
+db.prepare('UPDATE settings SET value = ? WHERE key = ? AND value = ?').run(DEFAULTS.about, 'about', "RAV4 Retro is one guy in Ohio with too many first-gen RAV4s. When a part on mine broke and Toyota stopped making it, I scanned it, fixed the design and printed a better one.\n\nEverything here is made to order in UV-resistant ASA or PETG, test-fit on my own vehicles before it goes up for sale. If you need a part that isn't listed, send a photo and I'll see what I can do.");
 
 function getSetting(k) {
   const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(k);

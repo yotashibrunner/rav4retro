@@ -174,7 +174,7 @@ function home(products) {
     <div class="about-img">${photo('garage', 'The garage with the vehicles and printers', { sizes: '(max-width:900px) 100vw, 50vw' })}</div>
     <div class="about-text">
       <p class="kicker">Who's behind this</p>
-      <h2>Test-fit on our own vehicles before it's for sale.</h2>
+      <h2>Ten years in a first-gen RAV4.</h2>
       <p>${nl2br(getSetting('about'))}</p>
       <dl class="facts">
         <div><dt>Fits</dt><dd>1996–2000 RAV4, 2- and 4-door, unless a listing says otherwise</dd></div>
