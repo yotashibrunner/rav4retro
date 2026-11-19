@@ -87,6 +87,9 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 const pcols = db.prepare('PRAGMA table_info(products)').all().map(c => c.name);
 if (!pcols.includes('fitment')) db.exec("ALTER TABLE products ADD COLUMN fitment TEXT DEFAULT ''");
 if (!pcols.includes('oem_part')) db.exec("ALTER TABLE products ADD COLUMN oem_part TEXT DEFAULT ''");
+const ocols = db.prepare('PRAGMA table_info(orders)').all().map(c => c.name);
+if (!ocols.includes('discount')) db.exec('ALTER TABLE orders ADD COLUMN discount INTEGER DEFAULT 0');
+if (!ocols.includes('promo_code')) db.exec("ALTER TABLE orders ADD COLUMN promo_code TEXT DEFAULT ''");
 
 const DEFAULTS = {
   store_name: 'RAV4 Retro',

@@ -20,7 +20,7 @@
         ${q.hasPhysical ? `<tr><td></td><td colspan="2">Shipping</td><td class="r">${q.shipping ? fmt(q.shipping) : 'Free'}</td><td></td></tr>` : ''}
         <tr class="tot"><td></td><td colspan="2">Total</td><td class="r">${fmt(q.total)}</td><td></td></tr></table>
       <div class="checkout"><button class="btn" id="checkout" ${q.lines.length ? '' : 'disabled'}>Checkout securely</button>
-      <p class="small muted">Secure payment by Stripe: cards, Apple Pay and Google Pay. STL files download right after payment.</p>
+      <p class="small muted">Secure payment by Stripe: cards, Apple Pay and Google Pay. STL files download right after payment. By ordering you agree to our <a href="/terms">terms</a>, <a href="/returns">returns policy</a> and <a href="/license">file license</a>.</p>
       <p id="co-err" class="notice err" hidden></p></div>`;
 
     // drop items the server rejected

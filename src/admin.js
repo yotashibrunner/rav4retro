@@ -104,7 +104,7 @@ router.get('/orders/:id', (req, res) => {
   <h1 class="page">${esc(o.number)} ${statusPill(o.status, ORDER_STATUS)}</h1>
   <div class="two"><div>
     <table class="tbl">${lines.map((l, i) => `<tr><td><b>${esc(l.title)}</b>${l.variant === 'digital' ? ' <span class="pill">STL</span>' : ''}<br><span class="small">${esc(l.desc || '')}</span></td><td>× ${l.qty}</td><td class="r">${money(l.unit * l.qty)}</td></tr>`).join('')}
-    <tr><td colspan="2">Shipping</td><td class="r">${money(o.shipping)}</td></tr><tr class="tot"><td colspan="2">Total</td><td class="r">${money(o.total)}</td></tr></table>
+    <tr><td colspan="2">Shipping</td><td class="r">${money(o.shipping)}</td></tr>${o.discount ? `<tr><td colspan="2">Discount${o.promo_code ? ` (${esc(o.promo_code)})` : ''}</td><td class="r">−${money(o.discount)}</td></tr>` : ''}<tr class="tot"><td colspan="2">Total</td><td class="r">${money(o.total)}</td></tr></table>
     ${o.request_id ? `<p>From custom request <a href="/admin/requests/${o.request_id}">#${o.request_id}</a></p>` : ''}
     ${dls.length ? `<h3>Downloads</h3>${dls.map(d => `<p class="small">${esc(d.file_name)} — used ${d.count}/${d.max_count}, expires ${dt(d.expires_at)}
       <form class="inline" method="post" action="/admin/downloads/${d.token}/reset"><button class="linkbtn">reset + extend</button></form></p>`).join('')}` : ''}

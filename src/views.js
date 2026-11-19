@@ -81,7 +81,8 @@ ${admin ? '' : `<footer class="foot">${stripe()}<div class="foot-word" aria-hidd
     <p>${esc(getSetting('tagline'))} Printed in Ohio.</p>
     ${contact ? `<p><a href="mailto:${esc(contact)}">${esc(contact)}</a></p>` : ''}${fb ? `<p><a href="${esc(fb)}" rel="noopener">Facebook</a></p>` : ''}</div>
   <div><h2>Shop</h2>${cats.map(c => `<a href="/shop?c=${esc(c.key)}">${esc(navLabel(c.label))}</a>`).join('')}<a href="/shop?type=stl">Printable files</a></div>
-  <div><h2>Help</h2><a href="/request">Request a part</a><a href="/#about">About</a><a href="/cart">Cart</a></div>
+  <div><h2>Help</h2><a href="/request">Request a part</a><a href="/returns">Returns</a><a href="/#about">About</a><a href="/cart">Cart</a></div>
+  <div><h2>Legal</h2><a href="/terms">Terms of sale</a><a href="/license">File license</a><a href="/privacy">Privacy</a></div>
 </div><div class="wrap legal"><span>© ${new Date().getFullYear()} ${esc(name)}</span><span>Not affiliated with Toyota. RAV4 is a trademark of Toyota Motor Corporation and is used here only to describe fitment. All parts are aftermarket.</span></div></footer>`}
 </body></html>`;
 }
@@ -246,6 +247,7 @@ function product(p) {
         ${p.pricing_mode !== 'sqft' ? `<label class="qty-l">Qty<input type="number" id="qty" value="1" min="1" max="${p.stock != null ? Math.max(p.stock, 1) : 50}"></label>` : ''}
         </div>
         <label>Notes <span class="muted">(optional)</span><input id="notes" maxlength="200" placeholder="Special instructions"></label>
+        ${p.digital_enabled ? '<p class="small muted license-note">Files are for personal, non-commercial printing only. No sharing or selling files or prints. <a href="/license">File license</a></p>' : ''}
         <p class="small muted">${outOfStock ? '<b>Out of stock.</b> The file is still available.' : p.stock != null ? `${p.stock} in stock` : 'Printed to order'}${p.lead_time ? ` · ships in ${esc(p.lead_time)}` : ''}</p>
       </div>
       <div class="dig-opts" ${p.physical_enabled ? 'hidden' : ''}><p class="small muted">Instant download after checkout${p.stl_name ? ` · <code>${esc(p.stl_name)}</code>` : ''}. Personal use only.</p></div>
@@ -273,9 +275,9 @@ function orderPage(o, downloads, flash) {
   <h1 class="page">Order ${esc(o.number)}</h1>
   <p class="status s-${esc(o.status)}">${esc(ORDER_STATUS[o.status] || o.status)}</p>
   ${o.tracking ? `<p>Tracking (${esc(o.carrier || 'carrier')}): <b>${esc(o.tracking)}</b></p>` : ''}
-  ${downloads.length ? `<div class="downloads"><h2>Your files</h2>${downloads.map(d => `<a class="btn" href="/download/${d.token}">⬇ ${esc(d.file_name)}</a> <span class="small muted">${d.max_count - d.count} downloads left · expires ${new Date(d.expires_at).toLocaleDateString()}</span><br>`).join('')}</div>` : ''}
+  ${downloads.length ? `<div class="downloads"><h2>Your files</h2><p class="small muted">Licensed for your personal, non-commercial use only. Please don't share or sell the files or prints made from them. <a href="/license">File license</a></p>${downloads.map(d => `<a class="btn" href="/download/${d.token}">⬇ ${esc(d.file_name)}</a> <span class="small muted">${d.max_count - d.count} downloads left · expires ${new Date(d.expires_at).toLocaleDateString()}</span><br>`).join('')}</div>` : ''}
   <table class="tbl">${lines.map(l => `<tr><td>${esc(l.title)}${l.variant === 'digital' ? ' <span class="pill">STL</span>' : ''}<br><span class="small muted">${esc(l.desc || '')}</span></td><td>× ${l.qty}</td><td class="r">${money(l.unit * l.qty)}</td></tr>`).join('')}
-  <tr><td colspan="2">Shipping</td><td class="r">${money(o.shipping)}</td></tr><tr class="tot"><td colspan="2">Total</td><td class="r">${money(o.total)}</td></tr></table>
+  <tr><td colspan="2">Shipping</td><td class="r">${money(o.shipping)}</td></tr>${o.discount ? `<tr><td colspan="2">Discount${o.promo_code ? ` (${esc(o.promo_code)})` : ''}</td><td class="r">−${money(o.discount)}</td></tr>` : ''}<tr class="tot"><td colspan="2">Total</td><td class="r">${money(o.total)}</td></tr></table>
   ${addr?.address ? `<p class="small">Shipping to: ${esc(addr.name)}, ${esc(addr.address.line1)} ${esc(addr.address.line2 || '')}, ${esc(addr.address.city)}, ${esc(addr.address.state)} ${esc(addr.address.postal_code)}</p>` : ''}
   <p class="small muted">Bookmark this page. It's your order receipt${o.email ? ` (also emailed to ${esc(o.email)})` : ''}.</p>`);
 }

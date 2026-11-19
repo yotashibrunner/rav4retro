@@ -86,6 +86,8 @@ async function stripeCheckout(order, { pickup = false } = {}) {
       ? `${base}/request/${order.request_id}?k=${db.prepare('SELECT access_key FROM requests WHERE id = ?').get(order.request_id)?.access_key || ''}`
       : `${base}/cart`,
     phone_number_collection: { enabled: true },
+    // discount codes are created in the Stripe dashboard (Product catalog → Coupons)
+    allow_promotion_codes: true,
   };
   if (order.email) params.customer_email = order.email;
   if (order.has_physical && !pickup) {
@@ -103,12 +105,22 @@ async function stripeCheckout(order, { pickup = false } = {}) {
   return session.url;
 }
 
+function promoCode(session) {
+  const d = (session.discounts || [])[0];
+  const pc = d && d.promotion_code;
+  return (pc && typeof pc === 'object' ? pc.code : '') || '';
+}
+
 // Idempotent — called from webhook and from the success page.
 async function fulfill(orderId, session) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order || order.status !== 'pending') return order;
   if (session.payment_status !== 'paid') return order;
 
+  // webhook sessions don't include the promo code text; fetch it when a discount was used
+  if (session.total_details?.amount_discount && stripe && !promoCode(session)) {
+    try { session = await stripe.checkout.sessions.retrieve(session.id, { expand: ['discounts.promotion_code'] }); } catch (e) { console.error('promo lookup', e.message); }
+  }
   const cd = session.customer_details || {};
   const ship = session.collected_information?.shipping_details || session.shipping_details || null;
   const days = parseInt(getSetting('download_days'), 10) || 30;
@@ -121,6 +133,11 @@ async function fulfill(orderId, session) {
       phone = ?, stripe_payment_intent = ?, shipping_address = ? WHERE id = ? AND status = 'pending'`)
       .run(cd.email || null, ship?.name || cd.name || null, cd.phone || null, session.payment_intent || null, ship ? JSON.stringify(ship) : null, order.id).changes;
     if (!changed) return false;
+    const disc = session.total_details?.amount_discount || 0;
+    if (disc > 0 || (session.amount_total != null && session.amount_total !== order.total)) {
+      db.prepare('UPDATE orders SET discount = ?, promo_code = ?, total = ? WHERE id = ?')
+        .run(disc, promoCode(session), session.amount_total ?? order.total - disc, order.id);
+    }
     for (const l of lines) {
       if (l.variant === 'digital' && l.product_id) {
         const p = db.prepare('SELECT stl_path, stl_name FROM products WHERE id = ?').get(l.product_id);

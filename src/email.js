@@ -2,6 +2,14 @@
 const { db, getSetting } = require('./db');
 
 const money = c => '$' + (Number(c || 0) / 100).toFixed(2);
+// accepts "orders@x.net", "Name <orders@x.net>", with or without stray quotes
+function fromAddress() {
+  const raw = String(process.env.EMAIL_FROM || '').trim().replace(/^["']|["']$/g, '').trim();
+  const m = raw.match(/[^\s<>"']+@[^\s<>"']+\.[a-z]{2,}/i);
+  if (!m) return 'RAV4 Retro <orders@rav4retro.net>';
+  const name = raw.slice(0, raw.indexOf(m[0])).replace(/[<"']/g, '').trim();
+  return `${name || 'RAV4 Retro'} <${m[0]}>`;
+}
 const base = () => (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -11,7 +19,7 @@ async function send(to, subject, html) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: process.env.EMAIL_FROM || 'RAV4 Retro <orders@rav4retro.com>', to, subject, html, reply_to: process.env.ADMIN_EMAIL || undefined }),
+    body: JSON.stringify({ from: fromAddress(), to, subject, html, reply_to: process.env.ADMIN_EMAIL || undefined }),
   });
   if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
 }
@@ -27,6 +35,7 @@ function itemsTable(order) {
   const lines = JSON.parse(order.items);
   return `<table style="width:100%;border-collapse:collapse;font-size:14px">${lines.map(l => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${esc(l.title)}${l.variant === 'digital' ? ' (STL)' : ''} × ${l.qty}<br><small style="color:#777">${esc(l.desc || '')}</small></td><td style="text-align:right;border-bottom:1px solid #eee">${money(l.unit * l.qty)}</td></tr>`).join('')}
   <tr><td style="padding:6px 0">Shipping</td><td style="text-align:right">${money(order.shipping)}</td></tr>
+  ${order.discount ? `<tr><td style="padding:6px 0">Discount${order.promo_code ? ` (${esc(order.promo_code)})` : ''}</td><td style="text-align:right">−${money(order.discount)}</td></tr>` : ''}
   <tr><td style="padding:6px 0"><b>Total</b></td><td style="text-align:right"><b>${money(order.total)}</b></td></tr></table>`;
 }
 
@@ -34,7 +43,7 @@ const orderUrl = o => `${base()}/order/${o.number}?k=${o.access_key}`;
 
 async function orderConfirmation(order) {
   const dls = db.prepare('SELECT * FROM downloads WHERE order_id = ?').all(order.id);
-  const dlHtml = dls.length ? `<h3>Your downloads</h3><ul>${dls.map(d => `<li><a href="${base()}/download/${d.token}">${esc(d.file_name)}</a></li>`).join('')}</ul>
+  const dlHtml = dls.length ? `<h3>Your downloads</h3><ul>${dls.map(d => `<li><a href="${base()}/download/${d.token}">${esc(d.file_name)}</a></li>`).join('')}</ul><p style="font-size:13px;color:#666">Files are licensed for your personal, non-commercial use only. Please don't share or sell the files or prints made from them. <a href="${base()}/license">File license</a></p>
     <p style="font-size:13px;color:#555">Links work ${d0(dls).max_count} times and expire ${new Date(d0(dls).expires_at).toLocaleDateString()}.</p>` : '';
   await send(order.email, `Order ${order.number} confirmed`, wrap(`<p>Thank you${order.name ? ', ' + esc(order.name.split(' ')[0]) : ''}. Your order <b>${order.number}</b> has been received.</p>
     ${itemsTable(order)}${dlHtml}

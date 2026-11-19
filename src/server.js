@@ -66,6 +66,10 @@ app.get('/p/:slug', (req, res) => {
 
 
 app.get('/cart', (req, res) => res.send(views.cart()));
+app.get(['/terms', '/license', '/returns', '/privacy'], (req, res) => {
+  const p = require('./legal').page(req.path.slice(1));
+  res.send(views.layout(p.title, p.html));
+});
 
 app.post('/api/cart/quote', (req, res) => {
   const q = commerce.quoteCart(req.body.items);
