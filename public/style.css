@@ -348,3 +348,4 @@ details.more[open] summary { margin-bottom: 16px; }
 .legal-doc p, .legal-doc li { color: var(--ink-2); }
 .legal-doc ul { padding-left: 20px; } .legal-doc li { margin-bottom: 6px; }
 @media (min-width: 961px) { .foot-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } }
+#ship-country { font: inherit; font-size: 14px; padding: 3px 6px; margin-left: 4px; border: 1px solid var(--rule); border-radius: 4px; background: var(--white); max-width: 160px; }

@@ -92,6 +92,57 @@ router.get('/orders', (req, res) => {
   res.send(page('Orders', `<h1 class="page">Orders</h1><div class="filters">${tab('open', 'To do')}${tab('shipped', 'Shipped')}${tab('complete', 'Complete')}${tab('all', 'All paid')}${tab('pending', 'Abandoned')}${tab('cancelled', 'Cancelled')}</div>${ordersTable(rows)}`));
 });
 
+const shipping = require('./shipping');
+function parcelDefaults() {
+  const m = String(getSetting('parcel_default') || '').match(/([\d.]+)\s*x\s*([\d.]+)\s*x\s*([\d.]+)\s*,\s*([\d.]+)/i);
+  return m ? { l: m[1], w: m[2], h: m[3], lb: m[4] } : { l: 10, w: 8, h: 4, lb: 1 };
+}
+function labelPanel(o) {
+  if (o.label_url) return `<p><a class="btn sm" target="_blank" href="${esc(o.label_url)}">Print shipping label</a></p>`;
+  if (!o.has_physical || !['paid', 'printing'].includes(o.status) || !o.shipping_address) return '';
+  if (!shipping.enabled()) return '<p class="small muted">Add SHIPPO_API_KEY in Railway to buy labels here.</p>';
+  const miss = shipping.missingFrom();
+  if (miss.length) return '<p class="small muted">Fill in your return address in <a href="/admin/settings">Settings</a> to buy labels.</p>';
+  const p = parcelDefaults();
+  return `<form class="form label-form" method="get" action="/admin/orders/${o.id}/rates">
+    <h3>Shipping label${shipping.isTest() ? ' <span class="pill">test mode</span>' : ''}</h3>
+    <div class="dims"><label>L (in)<input name="l" value="${esc(p.l)}" inputmode="decimal"></label><label>W<input name="w" value="${esc(p.w)}" inputmode="decimal"></label><label>H<input name="h" value="${esc(p.h)}" inputmode="decimal"></label><label>Weight (lb)<input name="lb" value="${esc(p.lb)}" inputmode="decimal"></label></div>
+    <button class="btn sm">Get rates</button></form>`;
+}
+router.get('/orders/:id/rates', async (req, res) => {
+  const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(parseInt(req.params.id, 10));
+  if (!o) return res.sendStatus(404);
+  const num = (v, d) => (Number(v) > 0 ? Number(v) : d);
+  const parcel = { l: num(req.query.l, 10), w: num(req.query.w, 8), h: num(req.query.h, 4), lb: num(req.query.lb, 1) };
+  try {
+    const list = await shipping.rates(o, parcel);
+    res.send(page(`Label for ${o.number}`, `<p><a href="/admin/orders/${o.id}">← ${esc(o.number)}</a></p>
+      <h1 class="page">Pick a rate</h1><p class="muted">${parcel.l}×${parcel.w}×${parcel.h} in, ${parcel.lb} lb${shipping.isTest() ? ' · <b>test mode, no real postage</b>' : ''}</p>
+      <form class="form" method="post" action="/admin/orders/${o.id}/label">
+      <table class="tbl">${list.map((r, i) => `<tr><td><input type="radio" name="rate" value="${esc(r.id)}" ${i ? '' : 'checked'} id="r${i}"></td>
+        <td><label for="r${i}"><b>${esc(r.carrier)}</b> ${esc(r.service)}</label></td><td>${r.days ? r.days + ' days' : ''}</td><td class="r">$${r.amount.toFixed(2)}</td></tr>`).join('')}</table>
+            <label class="check"><input type="checkbox" name="notify" checked> Mark shipped and email the customer tracking</label>
+      <button class="btn">Buy label</button></form>`));
+  } catch (e) {
+    res.send(page('Rates failed', `<p><a href="/admin/orders/${o.id}">← ${esc(o.number)}</a></p><div class="notice err">${esc(e.message)}</div>`));
+  }
+});
+router.post('/orders/:id/label', async (req, res) => {
+  const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(parseInt(req.params.id, 10));
+  if (!o || !req.body.rate) return res.sendStatus(400);
+  if (o.label_url) return res.redirect(`/admin/orders/${o.id}`); // never buy twice
+  try {
+    const t = await shipping.buy(req.body.rate);
+    const carrier = /usps/i.test(t.trackingUrl || '') ? 'USPS' : /ups\./i.test(t.trackingUrl || '') ? 'UPS' : /fedex/i.test(t.trackingUrl || '') ? 'FedEx' : (o.carrier || 'USPS');
+    db.prepare(`UPDATE orders SET label_url = ?, tracking = ?, carrier = ?, status = 'shipped', shipped_at = COALESCE(shipped_at, CURRENT_TIMESTAMP) WHERE id = ?`)
+      .run(t.label, t.tracking, carrier, o.id);
+    if (req.body.notify) email.orderShipped(db.prepare('SELECT * FROM orders WHERE id = ?').get(o.id)).catch(e => console.error(e.message));
+    res.redirect(`/admin/orders/${o.id}`);
+  } catch (e) {
+    res.send(page('Label failed', `<p><a href="/admin/orders/${o.id}">← ${esc(o.number)}</a></p><div class="notice err">${esc(e.message)}</div>`));
+  }
+});
+
 router.get('/orders/:id', (req, res) => {
   const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(parseInt(req.params.id, 10));
   if (!o) return res.status(404).send(page('Not found', '<p>Order not found.</p>'));
@@ -110,7 +161,9 @@ router.get('/orders/:id', (req, res) => {
       <form class="inline" method="post" action="/admin/downloads/${d.token}/reset"><button class="linkbtn">reset + extend</button></form></p>`).join('')}` : ''}
   </div><div>
     <h3>Customer</h3><p>${esc(o.name || '—')}<br><a href="mailto:${esc(o.email)}">${esc(o.email || '')}</a><br>${esc(o.phone || '')}</p>
-    ${addr?.address ? `<h3>Ship to</h3><p class="addr">${esc(addr.name)}<br>${esc(addr.address.line1)}${addr.address.line2 ? '<br>' + esc(addr.address.line2) : ''}<br>${esc(addr.address.city)}, ${esc(addr.address.state)} ${esc(addr.address.postal_code)}</p>` : o.has_physical ? '<p class="muted">No shipping address (pickup).</p>' : ''}
+    ${addr?.address ? `<h3>Ship to</h3><p class="addr">${esc(addr.name)}<br>${esc(addr.address.line1)}${addr.address.line2 ? '<br>' + esc(addr.address.line2) : ''}<br>${esc(addr.address.city)}, ${esc(addr.address.state)} ${esc(addr.address.postal_code)}${addr.address.country && addr.address.country !== 'US' ? '<br><b>' + esc(addr.address.country) + '</b>' : ''}</p>${labelPanel(o)}` : o.has_physical ? '<p class="muted">No shipping address (pickup).</p>' : ''}
+    ${lines.some(l => l.printify_id) ? `<h3>Printify</h3><p class="small">${o.printify_order_id ? `Sent · order <a target="_blank" href="https://printify.com/app/order/${esc(o.printify_order_id)}">${esc(o.printify_order_id)} ↗</a> · ${esc(o.printify_status || '')}` : o.status === 'pending' ? 'Sends after payment.' : `<b>Not sent.</b> ${esc(o.printify_status || '')}`}</p>
+      ${!o.printify_order_id && o.status !== 'pending' && o.status !== 'cancelled' ? `<form class="inline" method="post" action="/admin/orders/${o.id}/printify"><button class="btn sm">Send to Printify</button></form>` : ''}` : ''}
     <p class="small muted">Created ${dt(o.created_at)}${o.paid_at ? ` · Paid ${dt(o.paid_at)}` : ''}${o.shipped_at ? ` · Shipped ${dt(o.shipped_at)}` : ''}</p>
     <p class="small"><a target="_blank" href="${base}/order/${o.number}?k=${o.access_key}">Customer's order page ↗</a>${o.stripe_payment_intent ? ` · <a target="_blank" href="https://dashboard.stripe.com/payments/${esc(o.stripe_payment_intent)}">Stripe ↗</a>` : ''}</p>
     <form class="form" method="post" action="/admin/orders/${o.id}">
@@ -133,6 +186,25 @@ router.post('/orders/:id', async (req, res) => {
   }
   if (o.request_id && ['shipped', 'complete'].includes(status)) db.prepare("UPDATE requests SET status = 'done' WHERE id = ?").run(o.request_id);
   res.redirect(`/admin/orders/${o.id}`);
+});
+
+router.post('/orders/:id/printify', async (req, res) => {
+  const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(parseInt(req.params.id, 10));
+  if (!o) return res.sendStatus(404);
+  try { await require('./printify').submit(o); res.redirect(`/admin/orders/${o.id}`); }
+  catch (e) { res.send(page('Printify error', `<p><a href="/admin/orders/${o.id}">← ${esc(o.number)}</a></p><div class="notice err">${esc(e.message)}</div>`)); }
+});
+
+router.post('/printify/sync', async (req, res) => {
+  try { await require('./printify').sync(); res.redirect('/admin/products?synced=1'); }
+  catch (e) { res.send(page('Printify sync failed', `<p><a href="/admin/products">← Products</a></p><div class="notice err">${esc(e.message)}</div>`)); }
+});
+
+router.post('/printify/webhooks', async (req, res) => {
+  try {
+    if (!/^https:/.test(process.env.BASE_URL || '')) throw new Error('Set BASE_URL to your live https address (e.g. https://www.rav4retro.net) first.');
+    await require('./printify').connectWebhooks(); res.redirect('/admin/products?hooked=1');
+  } catch (e) { res.send(page('Could not connect shipping updates', `<p><a href="/admin/products">← Products</a></p><div class="notice err">${esc(e.message)}</div>`)); }
 });
 
 router.post('/downloads/:token/reset', (req, res) => {
@@ -232,11 +304,17 @@ const productUpload = multer({
 router.get('/products', (req, res) => {
   const rows = db.prepare('SELECT * FROM products ORDER BY active DESC, sort ASC, id DESC').all().map(parseProduct);
   const cats = Object.fromEntries(getCategories().map(c => [c.key, c.label]));
-  res.send(page('Products', `<h1 class="page">Products <a class="btn sm" href="/admin/products/new">Add a product</a></h1>
+  const pf = require('./printify');
+  const st = pf.status();
+  const podBar = pf.enabled() ? `<div class="notice">Merch from Printify (shop ${esc(process.env.PRINTIFY_SHOP_ID)}) syncs every 30 min${st.at ? ` · last sync ${dt(st.at.replace('T', ' ').replace(/\..*/, ''))}, ${st.count} products` : ''}${st.error ? ` · <b>last error:</b> ${esc(st.error)}` : ''}${req.query.synced ? ' · <b>synced just now</b>' : ''}${req.query.hooked ? ' · <b>shipping updates connected</b>' : ''}
+    <form class="inline" method="post" action="/admin/printify/sync"><button class="btn sm">Sync Printify now</button></form>
+    <form class="inline" method="post" action="/admin/printify/webhooks"><button class="linkbtn">Connect shipping updates</button></form></div>`
+    : '<p class="small muted">Printify merch: set PRINTIFY_TOKEN and PRINTIFY_SHOP_ID in Railway to sell print-on-demand items.</p>';
+  res.send(page('Products', `<h1 class="page">Products <a class="btn sm" href="/admin/products/new">Add a product</a></h1>${podBar}
   <table class="tbl"><tr><th></th><th>Product</th><th>Printed</th><th>STL</th><th>Stock</th><th></th></tr>${rows.map(p => `<tr class="${p.active ? '' : 'dim'}">
     <td>${p.images[0] ? `<img class="mini" src="${esc(p.images[0])}" alt="">` : ''}</td>
-    <td><a href="/admin/products/${p.id}">${esc(p.title)}</a><br><span class="small muted">${esc(cats[p.category] || p.category)}${p.featured ? ' · ★ featured' : ''}${p.active ? '' : ' · hidden'}</span></td>
-    <td>${p.physical_enabled ? (p.pricing_mode === 'sqft' ? `${money(p.sqft_price)}/sq ft` : money(p.physical_price)) : '—'}</td>
+    <td><a href="/admin/products/${p.id}">${esc(p.title)}</a><br><span class="small muted">${esc(cats[p.category] || p.category)}${p.printify_id ? ' · Printify' : ''}${p.featured ? ' · ★ featured' : ''}${p.active ? '' : ' · hidden'}</span></td>
+    <td>${p.physical_enabled ? (p.pricing_mode === 'sqft' ? `${money(p.sqft_price)}/sq ft` : (p.printify_id ? 'from ' : '') + money(p.physical_price)) : '—'}</td>
     <td>${p.digital_enabled ? money(p.digital_price) + (p.stl_path ? '' : ' <span class="pill s-cancelled">no file</span>') : '—'}</td>
     <td>${p.stock == null ? 'to order' : p.stock}</td><td><a target="_blank" href="/p/${esc(p.slug)}">view ↗</a></td></tr>`).join('')}</table>
   ${rows.length ? '' : '<p class="muted">No products yet. Add one: name, price, a photo or two and save.</p>'}`));
@@ -246,6 +324,7 @@ function productForm(p) {
   const n = !p.id;
   const d = v => (v != null ? (v / 100).toFixed(2) : '');
   return page(n ? 'New product' : p.title, `<p><a href="/admin/products">← Products</a></p><h1 class="page">${n ? 'Add a product' : esc(p.title)}</h1>
+  ${p.printify_id ? `<div class="notice">This is a Printify item. Name, price, sizes, colors, photos and description come from Printify and are overwritten on each sync, so edit those in Printify. Hide it there (or delete it) to take it out of the shop. Category, featured and sort order set here are kept.</div>` : ''}
   <form class="form" method="post" enctype="multipart/form-data" action="/admin/products/${n ? 'new' : p.id}">
     <input type="hidden" name="pricing_mode" value="fixed">
     <label>Product name<input name="title" required value="${esc(p.title || '')}" placeholder="Front door tweeter panels"></label>
@@ -392,7 +471,8 @@ router.post('/photos/:key/clear', (req, res) => {
 const SETTINGS = [
   ['store_name', 'Store name'], ['tagline', 'Tagline (home headline)'], ['announcement', 'Announcement bar (blank = hidden)'],
   ['intro', 'Homepage intro', 'textarea'], ['about', 'About text', 'textarea'], ['contact_email', 'Public contact email (footer)'], ['facebook_url', 'Facebook page link (footer)'], ['next_drop', 'Next drop teaser on the home page (e.g. "Friday: something for the rear hatch"). Blank hides it.'], ['categories', 'Categories — one per line: key|Label', 'textarea'],
-  ['shipping_flat', 'Flat shipping (cents)', 'number'], ['free_shipping_over', 'Free shipping over (cents, 0 = never)', 'number'],
+  ['shipping_flat', 'Flat shipping (cents)', 'number'], ['free_shipping_over', 'Free shipping over (cents, 0 = never; US only)', 'number'], ['ship_from_name', 'Label return address: name'], ['ship_from_street', 'Return address: street'], ['ship_from_city', 'Return address: city'], ['ship_from_state', 'Return address: state (2 letters)'], ['ship_from_zip', 'Return address: ZIP'], ['ship_from_phone', 'Return address: phone (needed for some international labels)'], ['parcel_default', 'Default box for labels: LxWxH inches, weight lb (e.g. 10x8x4, 1)'],
+  ['intl_shipping', 'International shipping, one country per line: CODE|Name|price in dollars (e.g. AU|Australia|30.00). Delete a line to stop shipping there.', 'textarea'],
   ['download_days', 'Download link lifetime (days)', 'number'], ['download_max', 'Downloads allowed per purchase', 'number'],
   ['local_pickup', 'Pickup location'],
 ];

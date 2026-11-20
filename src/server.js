@@ -34,6 +34,15 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
   }
 });
 
+// Printify shipment updates (merch). Key in the URL; the order is re-read from Printify, not taken from the body.
+const printify = require('./printify');
+app.post('/webhook/printify', express.json({ limit: '200kb' }), (req, res) => {
+  if (!printify.enabled() || req.query.k !== printify.hookKey()) return res.sendStatus(404);
+  res.json({ received: true });
+  printify.handleWebhook(req.body).catch(e => console.error('Printify webhook', e.message));
+});
+printify.startAutoSync();
+
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
@@ -72,13 +81,13 @@ app.get(['/terms', '/license', '/returns', '/privacy'], (req, res) => {
 });
 
 app.post('/api/cart/quote', (req, res) => {
-  const q = commerce.quoteCart(req.body.items);
+  const q = commerce.quoteCart(req.body.items, { country: req.body.country });
   res.json(q);
 });
 
 app.post('/api/checkout', async (req, res) => {
   try {
-    const q = commerce.quoteCart(req.body.items);
+    const q = commerce.quoteCart(req.body.items, { country: req.body.country });
     if (q.errors.length) return res.status(400).json({ error: q.errors.join('; ') });
     if (!q.lines.length) return res.status(400).json({ error: 'Cart is empty' });
     if (!commerce.stripe) return res.status(503).json({ error: 'Checkout is not set up yet.' });

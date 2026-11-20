@@ -89,7 +89,14 @@ if (!pcols.includes('fitment')) db.exec("ALTER TABLE products ADD COLUMN fitment
 if (!pcols.includes('oem_part')) db.exec("ALTER TABLE products ADD COLUMN oem_part TEXT DEFAULT ''");
 const ocols = db.prepare('PRAGMA table_info(orders)').all().map(c => c.name);
 if (!ocols.includes('discount')) db.exec('ALTER TABLE orders ADD COLUMN discount INTEGER DEFAULT 0');
+if (!ocols.includes('ship_country')) db.exec("ALTER TABLE orders ADD COLUMN ship_country TEXT DEFAULT 'US'");
+if (!ocols.includes('label_url')) db.exec("ALTER TABLE orders ADD COLUMN label_url TEXT DEFAULT ''");
 if (!ocols.includes('promo_code')) db.exec("ALTER TABLE orders ADD COLUMN promo_code TEXT DEFAULT ''");
+// Printify print-on-demand
+if (!pcols.includes('printify_id')) db.exec('ALTER TABLE products ADD COLUMN printify_id TEXT');
+if (!pcols.includes('printify_variants')) db.exec('ALTER TABLE products ADD COLUMN printify_variants TEXT');
+if (!ocols.includes('printify_order_id')) db.exec('ALTER TABLE orders ADD COLUMN printify_order_id TEXT');
+if (!ocols.includes('printify_status')) db.exec("ALTER TABLE orders ADD COLUMN printify_status TEXT DEFAULT ''");
 
 const DEFAULTS = {
   store_name: 'RAV4 Retro',
@@ -106,6 +113,14 @@ const DEFAULTS = {
   contact_email: '',
   facebook_url: '',
   next_drop: '',
+  ship_from_name: '',
+  ship_from_street: '',
+  ship_from_city: '',
+  ship_from_state: 'OH',
+  ship_from_zip: '',
+  ship_from_phone: '',
+  parcel_default: '10x8x4, 1',
+  intl_shipping: 'CA|Canada|18.00\nAU|Australia|30.00\nNZ|New Zealand|30.00\nGB|United Kingdom|30.00',
 };
 const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
 for (const [k, v] of Object.entries(DEFAULTS)) ins.run(k, v);
@@ -131,6 +146,8 @@ function parseProduct(p) {
     ...p,
     images: JSON.parse(p.images || '[]'),
     colors: (p.colors || '').split(',').map(s => s.trim()).filter(Boolean),
+    // print-on-demand item from Printify: { options: [{name, values}], variants: [{id, price, title, opts}] }
+    pod: p.printify_id ? (() => { try { return JSON.parse(p.printify_variants || 'null'); } catch { return null; } })() : null,
   };
 }
 function token(n = 24) { return crypto.randomBytes(n).toString('base64url'); }

@@ -88,6 +88,7 @@ ${admin ? '' : `<footer class="foot">${stripe()}<div class="foot-word" aria-hidd
 }
 
 function cardPrice(p) {
+  if (p.printify_id && p.pod && new Set(p.pod.variants.map(v => v.price)).size > 1) return 'from ' + money(p.physical_price);
   if (p.physical_enabled) return money(p.physical_price);
   return money(p.digital_price);
 }
@@ -99,7 +100,7 @@ function productCard(p) {
     <div class="thumb">${p.images[0] ? `<img src="${esc(p.images[0])}" alt="" loading="lazy">` : '<div class="noimg">Photo coming</div>'}</div>
     <div class="card-body">
       <h3>${esc(p.title)}</h3>
-      <p class="card-sub">${esc(p.fitment || "'96–'00 RAV4")}</p>
+      <p class="card-sub">${esc(p.printify_id ? 'RAV4RETRO apparel' : (p.fitment || "'96–'00 RAV4"))}</p>
       <p class="card-price"><b>${cardPrice(p)}</b>${extra ? `<span>${extra}</span>` : ''}</p>
     </div>
   </a>`;
@@ -243,12 +244,14 @@ function product(p) {
           <label>Drawer depth (in)<input type="number" id="d" min="1" max="72" step="0.25" placeholder="20"></label></div>
           <p class="small muted">Measure the inside of the drawer. ${money(p.sqft_price)}/sq ft${p.min_price ? `, ${money(p.min_price)} minimum` : ''}.</p>` : ''}
         <div class="row-opts">
-        ${p.colors.length ? `<label>Color<select id="color">${p.colors.map(c => `<option>${esc(c)}</option>`).join('')}</select></label>` : ''}
+        ${p.pod ? p.pod.options.map((o, i) => `<label>${esc(o.name.replace(/s$/, ''))}<select class="pod-opt" data-i="${i}">${o.values.map(v => `<option>${esc(v)}</option>`).join('')}</select></label>`).join('') : ''}
+        ${!p.pod && p.colors.length ? `<label>Color<select id="color">${p.colors.map(c => `<option>${esc(c)}</option>`).join('')}</select></label>` : ''}
         ${p.pricing_mode !== 'sqft' ? `<label class="qty-l">Qty<input type="number" id="qty" value="1" min="1" max="${p.stock != null ? Math.max(p.stock, 1) : 50}"></label>` : ''}
         </div>
-        <label>Notes <span class="muted">(optional)</span><input id="notes" maxlength="200" placeholder="Special instructions"></label>
+        ${p.pod ? '' : '<label>Notes <span class="muted">(optional)</span><input id="notes" maxlength="200" placeholder="Special instructions"></label>'}
         ${p.digital_enabled ? '<p class="small muted license-note">Files are for personal, non-commercial printing only. No sharing or selling files or prints. <a href="/license">File license</a></p>' : ''}
-        <p class="small muted">${outOfStock ? '<b>Out of stock.</b> The file is still available.' : p.stock != null ? `${p.stock} in stock` : 'Printed to order'}${p.lead_time ? ` · ships in ${esc(p.lead_time)}` : ''}</p>
+        <p class="small muted">${p.pod ? 'Made to order' : outOfStock ? '<b>Out of stock.</b> The file is still available.' : p.stock != null ? `${p.stock} in stock` : 'Printed to order'}${p.lead_time ? ` · ships in ${esc(p.lead_time)}` : ''}</p>
+        <p class="small muted" id="pod-na" hidden>That combination isn't available. Try another size or color.</p>
       </div>
       <div class="dig-opts" ${p.physical_enabled ? 'hidden' : ''}><p class="small muted">Instant download after checkout${p.stl_name ? ` · <code>${esc(p.stl_name)}</code>` : ''}. Personal use only.</p></div>
       <button class="btn full" id="add">Add to cart</button>
@@ -257,7 +260,7 @@ function product(p) {
       ${p.fitment ? `<p class="small muted">Not sure it fits? <a href="/request?type=part_request&title=${encodeURIComponent('Fitment question: ' + p.title)}">Ask before you buy</a>.</p>` : ''}
     </div>
   </div>
-  <script>window.PRODUCT=${JSON.stringify({ id: p.id, physical: !!p.physical_enabled, digital: !!p.digital_enabled, out: outOfStock }).replace(/</g, '\\u003c')}</script>
+  <script>window.PRODUCT=${JSON.stringify({ id: p.id, physical: !!p.physical_enabled, digital: !!p.digital_enabled, out: outOfStock, pod: p.pod || null }).replace(/</g, '\\u003c')}</script>
   <script src="/static/product.js"></script>`);
 }
 

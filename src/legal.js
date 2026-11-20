@@ -30,6 +30,7 @@ const PAGES = {
 
 <h2>Shipping</h2>
 <p>Most orders are made to order and ship in the time shown on the product. Shipping times are estimates. Once a package is handed to the carrier, delivery times are up to the carrier; if a package is lost or arrives damaged, contact us and we'll make it right.</p>
+<p>We ship to the US and to the countries offered at checkout. International orders usually take 1–3 weeks. Any import duties, taxes or customs fees are the buyer's responsibility and are collected by the carrier or customs on delivery.</p>
 
 <h2>Custom work and part requests</h2>
 <p>Quotes for custom work are valid for 30 days. Work starts after you pay the quote. Because custom parts are made for you, they can't be returned once production starts, though we'll still fix our own mistakes.</p>

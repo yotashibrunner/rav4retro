@@ -16,6 +16,12 @@ function priceLine(p, it) {
   }
   if (!p.physical_enabled) return { error: `${p.title}: printed version not available` };
   const qty = Math.min(50, Math.max(1, parseInt(it.qty, 10) || 1));
+  if (p.printify_id) {
+    // print-on-demand: price comes from the chosen Printify variant
+    const v = (p.pod?.variants || []).find(x => x.id === Number(it.pv));
+    if (!v) return { error: `${p.title}: pick a size/color` };
+    return { ...base, qty, unit: v.price, desc: v.title, printify_id: p.printify_id, pv: v.id };
+  }
   if (p.stock != null && qty > p.stock) return { error: `${p.title}: only ${p.stock} in stock` };
   let unit = p.physical_price;
   const opts = [];
@@ -37,7 +43,17 @@ function priceLine(p, it) {
   return { ...base, ...extra, qty, unit, desc: opts.join(' · ') || '3D printed' };
 }
 
-function quoteCart(items) {
+// US plus the countries listed in Settings (one per line: CODE|Name|price in dollars)
+function shippingCountries() {
+  const list = [{ code: 'US', name: 'United States', rate: null }];
+  for (const line of String(getSetting('intl_shipping') || '').split(/\r?\n/)) {
+    const [code, name, price] = line.split('|').map(x => (x || '').trim());
+    if (/^[A-Z]{2}$/i.test(code) && name && Number(price) >= 0) list.push({ code: code.toUpperCase(), name, rate: Math.round(Number(price) * 100) });
+  }
+  return list;
+}
+
+function quoteCart(items, { country = 'US' } = {}) {
   const lines = [], errors = [];
   const get = db.prepare('SELECT * FROM products WHERE id = ?');
   for (const it of (Array.isArray(items) ? items : []).slice(0, 50)) {
@@ -50,14 +66,17 @@ function quoteCart(items) {
   const physSub = lines.filter(l => l.variant === 'physical').reduce((s, l) => s + l.line_total, 0);
   const flat = parseInt(getSetting('shipping_flat'), 10) || 0;
   const freeOver = parseInt(getSetting('free_shipping_over'), 10) || 0;
-  const shipping = hasPhysical ? (freeOver && physSub >= freeOver ? 0 : flat) : 0;
-  return { lines, errors, subtotal, shipping, total: subtotal + shipping, hasPhysical };
+  const countries = shippingCountries();
+  const dest = countries.find(x => x.code === String(country || 'US').toUpperCase()) || countries[0];
+  const shipping = !hasPhysical ? 0 : dest.code === 'US' ? (freeOver && physSub >= freeOver ? 0 : flat) : dest.rate;
+  return { lines, errors, subtotal, shipping, total: subtotal + shipping, hasPhysical, country: dest.code, countries: countries.map(({ code, name }) => ({ code, name })) };
 }
 
-function createOrder({ lines, subtotal, shipping, total, hasPhysical, requestId = null, emailAddr = null, name = null }) {
+function createOrder({ lines, subtotal, shipping, total, hasPhysical, requestId = null, emailAddr = null, name = null, country = 'US' }) {
   const number = shortCode('RR');
   const info = db.prepare(`INSERT INTO orders (number, access_key, items, subtotal, shipping, total, has_physical, request_id, email, name)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(number, token(18), JSON.stringify(lines), subtotal, shipping, total, hasPhysical ? 1 : 0, requestId, emailAddr, name);
+  db.prepare('UPDATE orders SET ship_country = ? WHERE id = ?').run(country || 'US', info.lastInsertRowid);
   return db.prepare('SELECT * FROM orders WHERE id = ?').get(info.lastInsertRowid);
 }
 
@@ -75,7 +94,7 @@ async function stripeCheckout(order, { pickup = false } = {}) {
         product_data: {
           name: l.title + (l.variant === 'digital' ? ' (STL file)' : ''),
           ...(l.desc ? { description: l.desc.slice(0, 500) } : {}),
-          ...(l.image && base.startsWith('https') ? { images: [base + l.image] } : {}),
+          ...(l.image && /^https:/.test(l.image) ? { images: [l.image] } : l.image && base.startsWith('https') ? { images: [base + l.image] } : {}),
         },
       },
     })),
@@ -91,11 +110,12 @@ async function stripeCheckout(order, { pickup = false } = {}) {
   };
   if (order.email) params.customer_email = order.email;
   if (order.has_physical && !pickup) {
-    params.shipping_address_collection = { allowed_countries: ['US'] };
+    const cc = order.ship_country || 'US';
+    params.shipping_address_collection = { allowed_countries: [cc] };
     params.shipping_options = [{
       shipping_rate_data: {
         type: 'fixed_amount',
-        display_name: order.shipping === 0 ? 'Free shipping' : 'Standard shipping',
+        display_name: cc !== 'US' ? 'International shipping (tracked)' : order.shipping === 0 ? 'Free shipping' : 'Standard shipping',
         fixed_amount: { amount: order.shipping, currency: 'usd' },
       },
     }];
@@ -155,7 +175,9 @@ async function fulfill(orderId, session) {
   const fresh = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
   email.orderConfirmation(fresh).catch(e => console.error('email error', e.message));
   email.adminNewOrder(fresh).catch(e => console.error('email error', e.message));
+  // merch lines go to Printify for printing and shipping
+  require('./printify').submit(fresh).catch(e => console.error('Printify submit failed', fresh.number, e.message));
   return fresh;
 }
 
-module.exports = { stripe, money, priceLine, quoteCart, createOrder, stripeCheckout, fulfill, BASE_URL };
+module.exports = { shippingCountries, stripe, money, priceLine, quoteCart, createOrder, stripeCheckout, fulfill, BASE_URL };
