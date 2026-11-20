@@ -120,6 +120,7 @@ const DEFAULTS = {
   ship_from_zip: '',
   ship_from_phone: '',
   parcel_default: '10x8x4, 1',
+  merch_margin: '30',
   intl_shipping: 'CA|Canada|18.00\nAU|Australia|30.00\nNZ|New Zealand|30.00\nGB|United Kingdom|30.00',
 };
 const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

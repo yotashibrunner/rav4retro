@@ -314,11 +314,21 @@ router.get('/products', (req, res) => {
   <table class="tbl"><tr><th></th><th>Product</th><th>Printed</th><th>STL</th><th>Stock</th><th></th></tr>${rows.map(p => `<tr class="${p.active ? '' : 'dim'}">
     <td>${p.images[0] ? `<img class="mini" src="${esc(p.images[0])}" alt="">` : ''}</td>
     <td><a href="/admin/products/${p.id}">${esc(p.title)}</a><br><span class="small muted">${esc(cats[p.category] || p.category)}${p.printify_id ? ' · Printify' : ''}${p.featured ? ' · ★ featured' : ''}${p.active ? '' : ' · hidden'}</span></td>
-    <td>${p.physical_enabled ? (p.pricing_mode === 'sqft' ? `${money(p.sqft_price)}/sq ft` : (p.printify_id ? 'from ' : '') + money(p.physical_price)) : '—'}</td>
+    <td>${p.physical_enabled ? (p.pricing_mode === 'sqft' ? `${money(p.sqft_price)}/sq ft` : p.printify_id ? podPriceCell(p) : money(p.physical_price)) : '—'}</td>
     <td>${p.digital_enabled ? money(p.digital_price) + (p.stl_path ? '' : ' <span class="pill s-cancelled">no file</span>') : '—'}</td>
     <td>${p.stock == null ? 'to order' : p.stock}</td><td><a target="_blank" href="/p/${esc(p.slug)}">view ↗</a></td></tr>`).join('')}</table>
   ${rows.length ? '' : '<p class="muted">No products yet. Add one: name, price, a photo or two and save.</p>'}`));
 });
+
+// Printify items: price range and what you keep on the cheapest size, after Printify + shipping + Stripe
+function podPriceCell(p) {
+  const vs = p.pod?.variants || [];
+  if (!vs.length) return '—';
+  const lo = Math.min(...vs.map(v => v.price)), hi = Math.max(...vs.map(v => v.price));
+  const v = vs.find(x => x.price === lo);
+  const keep = v.cost != null && v.ship != null ? v.price - v.cost - v.ship - Math.round(v.price * 0.029 + 30) : null;
+  return `${money(lo)}${hi > lo ? '–' + money(hi) : ''}${keep != null ? `<br><span class="small muted">cost ${money(v.cost + v.ship)} · keep ${money(keep)}</span>` : ''}`;
+}
 
 function productForm(p) {
   const n = !p.id;
@@ -475,6 +485,7 @@ const SETTINGS = [
   ['intl_shipping', 'International shipping, one country per line: CODE|Name|price in dollars (e.g. AU|Australia|30.00). Delete a line to stop shipping there.', 'textarea'],
   ['download_days', 'Download link lifetime (days)', 'number'], ['download_max', 'Downloads allowed per purchase', 'number'],
   ['local_pickup', 'Pickup location'],
+  ['merch_margin', 'Printify merch profit % (share of the sale price you keep after Printify cost, Printify US shipping and Stripe fees). Prices update on save. 0 = use the prices set in Printify.', 'number'],
 ];
 router.get('/settings', (req, res) => res.send(page('Settings', `<h1 class="page">Settings</h1>${req.query.ok ? '<div class="notice">Saved.</div>' : ''}
   <form class="form" method="post" action="/admin/settings">${SETTINGS.map(([k, l, t]) => t === 'textarea'
@@ -488,8 +499,11 @@ router.get('/settings', (req, res) => res.send(page('Settings', `<h1 class="page
    <li>BASE_URL: ${esc(process.env.BASE_URL || '❌ not set')}</li>
    <li>Data dir: <code>${esc(require('./db').DATA_DIR)}</code></li></ul>`)));
 
-router.post('/settings', (req, res) => {
+router.post('/settings', async (req, res) => {
+  const before = getSetting('merch_margin');
   for (const [k] of SETTINGS) if (req.body[k] != null) setSetting(k, req.body[k]);
+  const pf = require('./printify');
+  if (pf.enabled() && getSetting('merch_margin') !== before) await pf.sync().catch(e => console.error('Printify resync', e.message));
   res.redirect('/admin/settings?ok=1');
 });
 

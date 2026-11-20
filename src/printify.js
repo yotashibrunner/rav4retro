@@ -46,7 +46,8 @@ function shape(p) {
     .filter(o => o.values.length);
   const vs = variants.map(v => ({
     id: v.id,
-    price: v.price,
+    price: v.price,          // Printify retail price (replaced below when auto-pricing is on)
+    cost: v.cost ?? null,    // Printify base cost, cents
     title: v.title,
     opts: (v.options || []).map(id => valueTitle.get(id)).filter(Boolean),
   }));
@@ -66,6 +67,33 @@ function uniqueSlug(title, exceptId) {
   return slug;
 }
 
+// ---------- auto-pricing ----------
+// Price = (Printify base cost + Printify US shipping + Stripe fee) marked up so `merch_margin`% of what the
+// customer pays is profit, rounded up to .99. Shipping is built in so free-shipping orders still make money.
+const STRIPE_PCT = 0.029, STRIPE_FIXED = 30;
+const margin = () => {
+  const m = parseFloat(getSetting('merch_margin'));
+  return Number.isFinite(m) && m > 0 && m < 60 ? m / 100 : 0; // 0 = use the prices set in Printify
+};
+const up99 = c => Math.max(99, Math.ceil((c + 1) / 100) * 100 - 1);
+function autoPrice(cost, ship, m) {
+  return up99((cost + ship + STRIPE_FIXED) / (1 - m - STRIPE_PCT));
+}
+async function shippingTable(bp, pp, cache) {
+  const key = `${bp}/${pp}`;
+  if (!cache.has(key)) {
+    cache.set(key, call(`/catalog/blueprints/${bp}/print_providers/${pp}/shipping.json`)
+      .then(r => r.profiles || [])
+      .catch(e => { console.error('Printify shipping lookup failed', key, e.message); return []; }));
+  }
+  return cache.get(key);
+}
+function usShipping(profiles, variantId) {
+  const hit = profiles.find(p => (p.variant_ids || []).includes(variantId) && (p.countries || []).includes('US'))
+    || profiles.find(p => (p.variant_ids || []).includes(variantId));
+  return hit?.first_item?.cost ?? null;
+}
+
 let lastSync = { at: null, count: 0, error: null };
 
 // Copy every Printify product into the shop. Prices/titles/photos always follow Printify;
@@ -78,10 +106,26 @@ async function sync() {
     all.push(...(r.data || []));
     if (!r.last_page || page >= r.last_page) break;
   }
+  const m = margin();
+  const shipCache = new Map();
+  const shaped = new Map();
+  for (const p of all) {
+    const s = shape(p);
+    if (m) {
+      const profiles = p.blueprint_id && p.print_provider_id ? await shippingTable(p.blueprint_id, p.print_provider_id, shipCache) : [];
+      for (const v of s.variants) {
+        const ship = usShipping(profiles, v.id);
+        v.ship = ship;
+        if (v.cost != null && ship != null) v.price = autoPrice(v.cost, ship, m);
+        else console.warn(`Printify: no cost/shipping for ${p.title} / ${v.title}; using Printify price`);
+      }
+    }
+    shaped.set(p.id, s);
+  }
   const seenIds = [];
   const tx = db.transaction(() => {
     for (const p of all) {
-      const s = shape(p);
+      const s = shaped.get(p.id);
       const show = p.visible !== false && s.variants.length > 0;
       const minPrice = s.variants.length ? Math.min(...s.variants.map(v => v.price)) : 0;
       const pod = JSON.stringify({ options: s.options, variants: s.variants });
@@ -102,7 +146,7 @@ async function sync() {
     for (const g of gone) db.prepare('UPDATE products SET active = 0 WHERE id = ?').run(g.id);
   });
   tx();
-  lastSync = { at: new Date().toISOString(), count: all.length, error: null };
+  lastSync = { at: new Date().toISOString(), count: all.length, error: null, margin: m };
   return lastSync;
 }
 
